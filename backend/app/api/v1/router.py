@@ -5,4 +5,7 @@ Aqui se iran agregando los routers de entrevistas, preguntas, evaluacion y repor
 
 from fastapi import APIRouter
 
+from app.api.v1.ai import router as ai_router
+
 api_v1_router = APIRouter()
+api_v1_router.include_router(ai_router, prefix="/ai")
