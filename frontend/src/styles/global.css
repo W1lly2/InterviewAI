@@ -425,6 +425,43 @@ h1 {
   color: var(--ink-soft);
 }
 
+/* Fila de entrada de respuesta del candidato */
+.chat-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.chat-input-row textarea {
+  border-radius: 12px;
+  resize: none;
+}
+
+/* Estado de espera de respuesta IA */
+.thinking {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* Mensaje de error visible al usuario */
+.chat-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff0f0;
+  border: 1px solid #f5c6c6;
+  color: #8b1a1a;
+  font-size: 0.9rem;
+}
+
+/* Chip de estado cuando Ollama no responde */
+.chip-error {
+  background: #fff0f0;
+  border-color: #f5c6c6;
+  color: #8b1a1a;
+}
+
 .phase-placeholder {
   margin-top: 16px;
   padding: 16px;

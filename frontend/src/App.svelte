@@ -1,5 +1,5 @@
 <script>
-  import ChatSimulationPage from './components/ChatSimulationPage.svelte';
+  import ChatPage from './components/ChatPage.svelte';
   import ConfigureInterviewPage from './components/ConfigureInterviewPage.svelte';
   import EvaluationSimulationPage from './components/EvaluationSimulationPage.svelte';
   import FinalReportPage from './components/FinalReportPage.svelte';
@@ -69,7 +69,7 @@
       on:continue={goToChatPhase}
     />
   {:else if currentStep === 3}
-    <ChatSimulationPage
+    <ChatPage
       config={interviewConfig}
       questions={generatedQuestions}
       on:back={goToQuestionGeneration}
