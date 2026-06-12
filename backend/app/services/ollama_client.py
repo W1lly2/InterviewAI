@@ -9,6 +9,7 @@ class OllamaClient:
     """Encapsula llamadas a Ollama para mantener endpoints limpios."""
 
     def __init__(self) -> None:
+        # Guarda configuracion en memoria para reutilizarla en cada request.
         self.base_url = OLLAMA_BASE_URL
         self.model = OLLAMA_MODEL
         self.timeout = OLLAMA_TIMEOUT_SECONDS
@@ -16,11 +17,13 @@ class OllamaClient:
     async def is_reachable(self) -> bool:
         """Comprueba si el servicio de Ollama responde localmente."""
         try:
+            # Consulta el catalogo de modelos como check de disponibilidad.
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(f"{self.base_url}/api/tags")
                 response.raise_for_status()
             return True
         except httpx.HTTPError:
+            # Cualquier error HTTP implica que el servicio no esta utilizable.
             return False
 
     async def chat(self, message: str, system_prompt: str | None = None) -> str:
@@ -32,6 +35,7 @@ class OllamaClient:
         }
 
         if system_prompt:
+            # Solo agrega instrucciones de sistema si el caller las envia.
             payload["system"] = system_prompt
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -39,4 +43,5 @@ class OllamaClient:
             response.raise_for_status()
 
         data = response.json()
+        # Normaliza la salida a string no vacio para evitar None aguas abajo.
         return str(data.get("response", "")).strip()

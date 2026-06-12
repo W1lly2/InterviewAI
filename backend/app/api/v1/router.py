@@ -8,4 +8,5 @@ from fastapi import APIRouter
 from app.api.v1.ai import router as ai_router
 
 api_v1_router = APIRouter()
+# Monta endpoints de IA bajo /api/v1/ai.
 api_v1_router.include_router(ai_router, prefix="/ai")
