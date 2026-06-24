@@ -1,9 +1,10 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { requestEvaluation } from '../modules/api/ai.ts';
+  import { evaluateInterviewSession, requestEvaluation } from '../modules/api/ai.ts';
 
   export let config;
   export let questions = [];
+  export let interviewId = null;
   export let transcript = [];
 
   const dispatch = createEventDispatcher();
@@ -14,24 +15,26 @@
 
   // Solicita evaluacion al backend cuando monta.
   onMount(async () => {
-    if (!transcript || transcript.length === 0) {
-      errorMessage = 'No hay transcript para evaluar.';
-      return;
-    }
-
     loading = true;
     try {
-      // Prepara el transcript en formato esperado por el backend
-      const formattedTranscript = transcript.map((msg) => ({
-        role: msg.role,
-        content: msg.content
-      }));
+      if (interviewId) {
+        // Ruta principal: evaluacion estructurada por sesion backend.
+        evaluation = await evaluateInterviewSession(interviewId);
+      } else {
+        if (!transcript || transcript.length === 0) {
+          errorMessage = 'No hay transcript para evaluar.';
+          return;
+        }
 
-      // Construye contexto de la entrevista
-      const context = `Candidato para puesto de ${config?.jobRole || 'General'}, nivel ${config?.seniority || 'Mid'}. Tipo: ${config?.interviewType || 'Tecnica'}`;
+        // Respaldo legacy por transcript libre.
+        const formattedTranscript = transcript.map((msg) => ({
+          role: msg.role,
+          content: msg.content
+        }));
 
-      // Solicita evaluacion
-      evaluation = await requestEvaluation(formattedTranscript, context);
+        const context = `Candidato para puesto de ${config?.jobRole || 'General'}, nivel ${config?.seniority || 'Mid'}. Tipo: ${config?.interviewType || 'Tecnica'}`;
+        evaluation = await requestEvaluation(formattedTranscript, context);
+      }
     } catch (err) {
       errorMessage = err.message ?? 'Error al evaluar las respuestas.';
     } finally {

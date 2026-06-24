@@ -7,7 +7,7 @@ class ChatRequest(BaseModel):
     """Mensaje del usuario para la simulacion de entrevista."""
 
     # Valida que el usuario siempre envie texto util y acotado.
-    message: str = Field(..., min_length=1, max_length=3000)
+    message: str = Field(..., min_length=1, max_length=6000)
     # Limita longitud de instrucciones para evitar prompts excesivos.
     system_prompt: str | None = Field(default=None, max_length=2000)
 

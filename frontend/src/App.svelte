@@ -18,6 +18,8 @@
   let currentStep = 1;
   let generatedQuestions = [];
   let chatTranscript = [];
+  let interviewSessionId = null;
+  let evaluationResult = null;
 
   let interviewConfig = createInitialInterviewConfig({
     jobRoles,
@@ -35,6 +37,8 @@
 
   function goToQuestionGeneration() {
     generateQuestions();
+    interviewSessionId = null;
+    evaluationResult = null;
     currentStep = 2;
   }
 
@@ -43,11 +47,13 @@
   }
 
   function goToEvaluationPhase(event) {
+    interviewSessionId = event?.detail?.interviewId ?? null;
     chatTranscript = event.detail.transcript || [];
     currentStep = 4;
   }
 
-  function goToFinalReport() {
+  function goToFinalReport(event) {
+    evaluationResult = event?.detail?.evaluation ?? null;
     currentStep = 5;
   }
 </script>
@@ -81,14 +87,22 @@
     <EvaluationSimulationPage
       config={interviewConfig}
       questions={generatedQuestions}
+      interviewId={interviewSessionId}
       transcript={chatTranscript}
       on:back={() => (currentStep = 3)}
       on:continue={goToFinalReport}
     />
   {:else}
     <FinalReportPage
+      evaluation={evaluationResult}
+      questions={generatedQuestions}
+      config={interviewConfig}
       on:back={() => (currentStep = 4)}
-      on:restart={() => (currentStep = 1)}
+      on:restart={() => {
+        interviewSessionId = null;
+        evaluationResult = null;
+        currentStep = 1;
+      }}
     />
   {/if}
 </main>

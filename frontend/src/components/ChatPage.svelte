@@ -1,6 +1,13 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { fetchAiStatus, sendChatMessage } from '../modules/api/ai.ts';
+  import { fetchAiStatus } from '../modules/api/ai.ts';
+  import {
+    loadInterviewTranscript,
+    startSession,
+    submitAnswerTurn
+  } from '../modules/interviewSession/chatService.ts';
+  import { interviewSessionStore } from '../modules/interviewSession/sessionStore.ts';
+  import { mapSessionMessagesToUi } from '../modules/interviewSession/transcriptMapper.ts';
 
   export let config;
   export let questions = [];
@@ -12,9 +19,6 @@
   let aiModel = '';
   let statusChecked = false;
 
-  // Indice de la pregunta activa.
-  let currentQuestionIndex = 0;
-
   // Texto que escribe el usuario candidato.
   let userInput = '';
 
@@ -24,76 +28,50 @@
   // Error visible para el usuario.
   let errorMessage = '';
 
-  // Historial de turnos de la entrevista.
+  // Estado local sincronizado desde session store.
+  let interviewId = null;
+  let currentQuestionIndex = 0;
+  let totalQuestions = questions.length;
+  let followUpStage = 0;
+  let interviewComplete = false;
+  let lastTurnSource = '';
+  let lastLatencyMs = 0;
   let transcript = [];
 
-  // Construye el prompt de sistema para el entrevistador segun la configuracion.
-  function buildSystemPrompt() {
-    return [
-      `Eres un entrevistador tecnico experto para el puesto de ${config.jobRole}, nivel ${config.seniority}.`,
-      `El tipo de entrevista es: ${config.interviewType}.`,
-      `El stack del candidato incluye: ${config.stack || 'general'}.`,
-      'Tu rol es hacer preguntas claras, profundas y adaptar el nivel segun las respuestas.',
-      'Si la respuesta es vaga, repregunta pidiendo ejemplos concretos o metricas.',
-      'Responde siempre en espanol. Sé directo y profesional.'
-    ].join('\n');
-  }
-
-  // Lanza la pregunta activa al transcript como turno de entrevistador.
-  function launchCurrentQuestion() {
-    const item = questions[currentQuestionIndex];
-
-    if (!item) return;
-
-    transcript = [
-      ...transcript,
-      {
-        role: 'interviewer',
-        label: `Pregunta ${currentQuestionIndex + 1} · ${item.category}`,
-        content: item.prompt
-      }
-    ];
-  }
-
-  // Avanza a la siguiente pregunta.
-  function nextQuestion() {
-    if (!questions.length) return;
-
-    currentQuestionIndex = Math.min(currentQuestionIndex + 1, questions.length - 1);
-    launchCurrentQuestion();
-  }
+  const unsubscribe = interviewSessionStore.subscribe((state) => {
+    interviewId = state.interviewId;
+    currentQuestionIndex = state.currentQuestionIndex;
+    totalQuestions = state.totalQuestions;
+    followUpStage = state.followUpStage;
+    interviewComplete = state.interviewComplete;
+    lastTurnSource = state.turnSource;
+    lastLatencyMs = state.lastLatencyMs;
+    transcript = mapSessionMessagesToUi(state.messages);
+  });
 
   // Envia la respuesta del candidato y obtiene reaccion del entrevistador IA.
   async function submitAnswer() {
     const text = userInput.trim();
 
-    if (!text || waiting) return;
+    if (!text || waiting || !interviewId || !aiReachable) return;
 
-    // Agrega turno candidato al transcript.
-    transcript = [
-      ...transcript,
-      { role: 'candidate', label: 'Tu respuesta', content: text }
-    ];
+    interviewSessionStore.pushCandidateAnswer(text);
     userInput = '';
     waiting = true;
     errorMessage = '';
 
     try {
-      // Construye contexto completo como prompt para Ollama.
-      const contextHistory = transcript
-        .map((t) => `[${t.label}]: ${t.content}`)
-        .join('\n\n');
-
-      const data = await sendChatMessage(contextHistory, buildSystemPrompt());
-
-      transcript = [
-        ...transcript,
-        {
-          role: 'interviewer',
-          label: `Entrevistador (${data.model})`,
-          content: data.reply
-        }
-      ];
+      const turn = await submitAnswerTurn(interviewId, text);
+      interviewSessionStore.pushInterviewerTurn({
+        reply: turn.reply,
+        source: turn.source,
+        currentQuestionIndex: turn.current_question_index,
+        totalQuestions: turn.total_questions,
+        followUpStage: turn.follow_up_stage,
+        interviewComplete: turn.interview_complete,
+        latencyMs: turn.latency_ms,
+        turnType: turn.turn_type
+      });
     } catch (err) {
       errorMessage = err.message ?? 'Error al conectar con el backend.';
     } finally {
@@ -110,22 +88,60 @@
   }
 
   // Verifica disponibilidad de Ollama al montar el componente.
-  onMount(async () => {
-    try {
-      const status = await fetchAiStatus();
-      aiReachable = status.reachable;
-      aiModel = status.configured_model;
-    } catch {
-      aiReachable = false;
-    } finally {
-      statusChecked = true;
+  onMount(() => {
+    interviewSessionStore.reset();
 
-      // Lanza la primera pregunta automaticamente si hay conexion.
-      if (aiReachable && questions.length) {
-        launchCurrentQuestion();
+    void (async () => {
+      try {
+        const status = await fetchAiStatus();
+        aiReachable = status.reachable;
+        aiModel = status.configured_model;
+      } catch {
+        aiReachable = false;
+      } finally {
+        statusChecked = true;
+
+        if (aiReachable && questions.length) {
+          try {
+            const started = await startSession(config, questions);
+            interviewSessionStore.setStarted({
+              interviewId: started.interview_id,
+              reply: started.reply,
+              source: started.source,
+              currentQuestionIndex: started.current_question_index,
+              totalQuestions: started.total_questions,
+              followUpStage: started.follow_up_stage,
+              interviewComplete: started.interview_complete,
+              latencyMs: started.latency_ms
+            });
+          } catch (err) {
+            errorMessage = err.message ?? 'No se pudo iniciar la sesion de entrevista.';
+          }
+        }
       }
-    }
+    })();
+
+    return () => {
+      unsubscribe();
+    };
   });
+
+  async function continueToEvaluation() {
+    if (!interviewId) return;
+
+    try {
+      const canonicalTranscript = await loadInterviewTranscript(interviewId);
+      dispatch('continue', {
+        interviewId,
+        transcript: canonicalTranscript
+      });
+    } catch {
+      dispatch('continue', {
+        interviewId,
+        transcript
+      });
+    }
+  }
 </script>
 
 <section class="chat-card">
@@ -142,9 +158,15 @@
     <div class="chat-meta" aria-label="Contexto de la sesion">
       <span class="config-chip">{config.jobRole}</span>
       <span class="config-chip">{config.seniority}</span>
+      <span class="config-chip">Q {currentQuestionIndex + 1}/{totalQuestions || 0}</span>
       {#if statusChecked}
         <span class="config-chip {aiReachable ? '' : 'chip-error'}">
           {aiReachable ? aiModel : 'IA sin conexion'}
+        </span>
+      {/if}
+      {#if lastTurnSource}
+        <span class="config-chip {lastTurnSource === 'fallback' ? 'chip-error' : ''}">
+          Turno: {lastTurnSource}
         </span>
       {/if}
     </div>
@@ -163,23 +185,24 @@
   <div class="chat-layout">
     <aside class="chat-sidebar">
       <h3>Preguntas preparadas</h3>
-      <p>Avanza manualmente si quieres saltar a la siguiente.</p>
-
-      <div class="chat-actions">
-        <button
-          type="button"
-          class="btn-secondary"
-          disabled={waiting || currentQuestionIndex >= questions.length - 1}
-          on:click={nextQuestion}
-        >
-          Siguiente pregunta
-        </button>
-      </div>
+      <p>El backend controla el stage y el avance automaticamente.</p>
 
       <div class="chat-summary">
         <span>Pregunta activa</span>
-        <strong>{currentQuestionIndex + 1} / {questions.length || 0}</strong>
+        <strong>{currentQuestionIndex + 1} / {totalQuestions || questions.length || 0}</strong>
       </div>
+
+      <div class="chat-summary">
+        <span>Profundizacion</span>
+        <strong>{followUpStage}</strong>
+      </div>
+
+      {#if lastLatencyMs > 0}
+        <div class="chat-summary">
+          <span>Latencia ultimo turno</span>
+          <strong>{lastLatencyMs} ms</strong>
+        </div>
+      {/if}
 
       {#if questions[currentQuestionIndex]}
         <div class="chat-current-question">
@@ -192,13 +215,24 @@
     <div class="chat-board">
       <div class="chat-board-header">
         <strong>Entrevista en curso</strong>
-        <span>{aiReachable ? `Modelo: ${aiModel}` : 'Backend no disponible'}</span>
+        <span>
+          {interviewComplete
+            ? 'Entrevista completada'
+            : aiReachable
+              ? `Modelo: ${aiModel}`
+              : 'Backend no disponible'}
+        </span>
       </div>
 
       <div class="chat-messages">
         {#each transcript as message (message)}
           <article class={`chat-message ${message.role}`}>
-            <span class="chat-label">{message.label}</span>
+            <span class="chat-label">
+              {message.label}
+              {#if message.role === 'interviewer'}
+                {' '}· {message.source}
+              {/if}
+            </span>
             <p>{message.content}</p>
           </article>
         {/each}
@@ -221,12 +255,12 @@
           on:keydown={handleKeydown}
           rows="3"
           placeholder="Escribe tu respuesta y presiona Enter para enviar..."
-          disabled={waiting || !aiReachable}
+          disabled={waiting || !aiReachable || interviewComplete}
         ></textarea>
         <button
           type="button"
           class="btn-primary"
-          disabled={waiting || !userInput.trim() || !aiReachable}
+          disabled={waiting || !userInput.trim() || !aiReachable || interviewComplete}
           on:click={submitAnswer}
         >
           {waiting ? 'Enviando...' : 'Enviar'}
@@ -240,7 +274,8 @@
         <button 
           type="button" 
           class="btn-primary" 
-          on:click={() => dispatch('continue', { transcript })}
+          disabled={!interviewId}
+          on:click={continueToEvaluation}
         >
           Ir a evaluar respuestas
         </button>
