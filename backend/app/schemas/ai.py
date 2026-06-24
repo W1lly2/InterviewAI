@@ -30,3 +30,42 @@ class AiStatusResponse(BaseModel):
     ollama_base_url: str
     # Señal booleana para habilitar o bloquear interaccion desde frontend.
     reachable: bool
+
+
+class FeedbackItem(BaseModel):
+    """Evaluacion de una pregunta y su respuesta."""
+
+    # Numero de la pregunta en la entrevista.
+    question_number: int
+    # Texto original de la pregunta formulada.
+    question: str
+    # Respuesta del candidato.
+    answer: str
+    # Fortalezas identificadas en la respuesta (max 3 bullets).
+    strengths: list[str]
+    # Areas de mejora detectadas (max 3 bullets).
+    gaps: list[str]
+    # Recomendacion puntual y accionable.
+    recommendation: str
+    # Score de 0 a 100 para esta respuesta.
+    score: int
+
+
+class EvaluationRequest(BaseModel):
+    """Solicitud de evaluacion del transcript completo del chat."""
+
+    # Historial del chat: lista de {role: interviewer|candidate, content: ...}
+    transcript: list[dict] = Field(..., min_items=1)
+    # Contexto de la entrevista (puesto, seniority, tipo).
+    interview_context: str | None = Field(default=None, max_length=1000)
+
+
+class EvaluationResponse(BaseModel):
+    """Resultado de la evaluacion de una entrevista completa."""
+
+    # Evaluaciones individuales por pregunta.
+    feedback_items: list[FeedbackItem]
+    # Score promedio de todas las respuestas.
+    overall_score: int
+    # Resumen ejecutivo de la sesion.
+    summary: str

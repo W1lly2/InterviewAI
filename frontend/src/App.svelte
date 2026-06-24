@@ -17,6 +17,7 @@
 
   let currentStep = 1;
   let generatedQuestions = [];
+  let chatTranscript = [];
 
   let interviewConfig = createInitialInterviewConfig({
     jobRoles,
@@ -41,7 +42,8 @@
     currentStep = 3;
   }
 
-  function goToEvaluationPhase() {
+  function goToEvaluationPhase(event) {
+    chatTranscript = event.detail.transcript || [];
     currentStep = 4;
   }
 
@@ -77,7 +79,9 @@
     />
   {:else if currentStep === 4}
     <EvaluationSimulationPage
+      config={interviewConfig}
       questions={generatedQuestions}
+      transcript={chatTranscript}
       on:back={() => (currentStep = 3)}
       on:continue={goToFinalReport}
     />

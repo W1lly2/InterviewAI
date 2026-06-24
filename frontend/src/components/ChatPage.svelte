@@ -237,7 +237,11 @@
         <button type="button" class="btn-secondary" on:click={() => dispatch('back')}>
           Volver a preguntas
         </button>
-        <button type="button" class="btn-primary" on:click={() => dispatch('continue')}>
+        <button 
+          type="button" 
+          class="btn-primary" 
+          on:click={() => dispatch('continue', { transcript })}
+        >
           Ir a evaluar respuestas
         </button>
       </div>

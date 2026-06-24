@@ -24,12 +24,12 @@ El backend ya incluye una integracion inicial para empezar con un modelo ligero 
 
 ### Modelo por defecto
 
-- `llama3.2:1b` (ligero para comenzar en equipos modestos)
+- `llama3.2:3b` (equilibrio entre calidad y consumo local)
 
 ### Variables de entorno opcionales
 
 - `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- `OLLAMA_MODEL` (default: `llama3.2:1b`)
+- `OLLAMA_MODEL` (default: `llama3.2:3b`)
 - `OLLAMA_TIMEOUT_SECONDS` (default: `90`)
 
 ### Endpoints disponibles
@@ -40,5 +40,5 @@ El backend ya incluye una integracion inicial para empezar con un modelo ligero 
 ### Arranque rapido
 
 1. Instalar Ollama y ejecutarlo en local.
-2. Descargar modelo ligero inicial: `ollama pull llama3.2:1b`
+2. Descargar modelo recomendado: `ollama pull llama3.2:3b`
 3. Levantar API: `uvicorn app.main:app --reload`

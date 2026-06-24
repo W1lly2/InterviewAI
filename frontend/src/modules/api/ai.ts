@@ -18,6 +18,22 @@ export interface ChatResponse {
   reply: string;
 }
 
+export interface FeedbackItem {
+  question_number: number;
+  question: string;
+  answer: string;
+  strengths: string[];
+  gaps: string[];
+  recommendation: string;
+  score: number;
+}
+
+export interface EvaluationResponse {
+  feedback_items: FeedbackItem[];
+  overall_score: number;
+  summary: string;
+}
+
 // --- Funciones ---
 
 /**
@@ -54,4 +70,30 @@ export async function sendChatMessage(
   }
 
   return res.json() as Promise<ChatResponse>;
+}
+
+/**
+ * Envia el transcript del chat para evaluacion con IA.
+ * @param transcript - Array de mensajes {role, content}
+ * @param context - Contexto opcional (puesto, seniority, tipo)
+ */
+export async function requestEvaluation(
+  transcript: Array<{ role: string; content: string }>,
+  context?: string
+): Promise<EvaluationResponse> {
+  const res = await fetch(`${API_BASE}/ai/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transcript,
+      interview_context: context
+    })
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({})) as { detail?: string };
+    throw new Error(detail?.detail ?? `Error ${res.status}`);
+  }
+
+  return res.json() as Promise<EvaluationResponse>;
 }
